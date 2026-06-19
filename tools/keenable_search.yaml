@@ -1,0 +1,80 @@
+identity:
+  name: keenable_search
+  author: keenable
+  label:
+    en_US: Keenable Search
+    zh_Hans: Keenable 搜索
+description:
+  human:
+    en_US: Search the web with Keenable, a search engine built for AI agents. Returns ranked results with titles, URLs, snippets and dates.
+    zh_Hans: 使用专为 AI 智能体打造的搜索引擎 Keenable 搜索网页，返回带标题、URL、摘要和日期的排序结果。
+  llm: Search the web for current information. Returns a ranked list of results, each with a title, URL, description snippet and publication date. Use this to answer questions about recent events, find sources, or look up facts. Follow up with keenable_fetch to read a result's full page content.
+parameters:
+  - name: query
+    type: string
+    required: true
+    form: llm
+    label:
+      en_US: Query
+      zh_Hans: 查询
+    human_description:
+      en_US: The search query to run.
+      zh_Hans: 要执行的搜索查询。
+    llm_description: The search query. Phrase it as the key terms you want to find on the web.
+  - name: mode
+    type: select
+    required: false
+    form: llm
+    default: pro
+    label:
+      en_US: Mode
+      zh_Hans: 模式
+    human_description:
+      en_US: "Search mode: pro (deeper) or realtime (low latency, needs an API key)."
+      zh_Hans: "搜索模式：pro（更深入）或 realtime（低延迟，需要 API Key）。"
+    llm_description: "Search mode. 'pro' is the default and goes deeper; 'realtime' is lower latency but requires an API key. Leave as pro unless you need the freshest possible results fast."
+    options:
+      - value: pro
+        label:
+          en_US: Pro
+          zh_Hans: Pro
+      - value: realtime
+        label:
+          en_US: Realtime
+          zh_Hans: Realtime
+  - name: site
+    type: string
+    required: false
+    form: llm
+    label:
+      en_US: Site
+      zh_Hans: 站点
+    human_description:
+      en_US: Restrict results to a single domain, e.g. github.com.
+      zh_Hans: 将结果限制在单个域名，例如 github.com。
+    llm_description: Optional. Restrict results to a single domain, e.g. "github.com" or "arxiv.org". Omit to search the whole web.
+  - name: published_after
+    type: string
+    required: false
+    form: llm
+    label:
+      en_US: Published after
+      zh_Hans: 发布于之后
+    human_description:
+      en_US: Only pages published on or after this date (YYYY-MM-DD).
+      zh_Hans: 仅返回在该日期当天或之后发布的页面（YYYY-MM-DD）。
+    llm_description: Optional. Only return pages published on or after this date, formatted YYYY-MM-DD. Use to bias toward recent content.
+  - name: published_before
+    type: string
+    required: false
+    form: llm
+    label:
+      en_US: Published before
+      zh_Hans: 发布于之前
+    human_description:
+      en_US: Only pages published on or before this date (YYYY-MM-DD).
+      zh_Hans: 仅返回在该日期当天或之前发布的页面（YYYY-MM-DD）。
+    llm_description: Optional. Only return pages published on or before this date, formatted YYYY-MM-DD.
+extra:
+  python:
+    source: tools/keenable_search.py

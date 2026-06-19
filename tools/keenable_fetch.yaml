@@ -1,0 +1,26 @@
+identity:
+  name: keenable_fetch
+  author: keenable
+  label:
+    en_US: Keenable Fetch
+    zh_Hans: Keenable 抓取
+description:
+  human:
+    en_US: Fetch a web page via Keenable and return its main content as clean markdown.
+    zh_Hans: 通过 Keenable 抓取网页，并以干净的 Markdown 返回其正文内容。
+  llm: Fetch a single web page and return its main content as clean markdown, stripped of navigation and boilerplate. Use this to read the full content of a URL, typically one returned by keenable_search. Rejects non-http(s) and private/internal URLs.
+parameters:
+  - name: url
+    type: string
+    required: true
+    form: llm
+    label:
+      en_US: URL
+      zh_Hans: 网址
+    human_description:
+      en_US: The URL of the page to fetch.
+      zh_Hans: 要抓取的页面网址。
+    llm_description: The absolute http(s) URL of the page to fetch and read, e.g. one returned by keenable_search.
+extra:
+  python:
+    source: tools/keenable_fetch.py

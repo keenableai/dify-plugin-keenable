@@ -1,0 +1,33 @@
+identity:
+  author: keenable
+  name: keenable
+  label:
+    en_US: Keenable
+    zh_Hans: Keenable
+  description:
+    en_US: Web search and page fetch built for AI agents. Keyless by default; add an API key to raise rate limits.
+    zh_Hans: 专为 AI 智能体打造的网页搜索与网页内容提取工具。默认无需密钥，可选填 API Key 以提升速率限制。
+  icon: icon.svg
+  tags:
+    - search
+    - productivity
+credentials_for_provider:
+  keenable_api_key:
+    type: secret-input
+    required: false
+    label:
+      en_US: Keenable API key (optional)
+      zh_Hans: Keenable API Key（可选）
+    placeholder:
+      en_US: Leave empty to run keyless, or paste keen_... to raise rate limits
+      zh_Hans: 留空即可无密钥使用，或填入 keen_... 以提升速率限制
+    help:
+      en_US: Optional. Keenable works keyless by default; a key lifts rate limits and enables realtime mode. Create one at https://keenable.ai
+      zh_Hans: 可选。Keenable 默认无需密钥即可使用；填入密钥可提升速率限制并启用 realtime 模式。在 https://keenable.ai 创建。
+    url: https://keenable.ai
+tools:
+  - tools/keenable_search.yaml
+  - tools/keenable_fetch.yaml
+extra:
+  python:
+    source: provider/keenable.py
