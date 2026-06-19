@@ -103,9 +103,38 @@ def test_reject_private_fetch_target(url):
         kc.reject_private_fetch_target(url)
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://2130706433/x",        # decimal -> 127.0.0.1
+        "http://0x7f000001/x",        # hex -> 127.0.0.1
+        "http://0177.0.0.1/x",        # octal -> 127.0.0.1
+        "http://127.1/x",             # short form -> 127.0.0.1
+        "http://[::ffff:169.254.169.254]/x",  # IPv4-mapped IMDS
+        "http://trusted.example.com@169.254.169.254/x",  # creds@ trick
+    ],
+)
+def test_reject_legacy_ip_encodings(url):
+    """Alternate IPv4 encodings the OS resolver accepts must still be blocked."""
+    with pytest.raises(kc.KeenableError):
+        kc.reject_private_fetch_target(url)
+
+
 @pytest.mark.parametrize("url", ["https://example.com/x", "https://github.com/a/b"])
 def test_allows_public_fetch_target(url):
     kc.reject_private_fetch_target(url)  # no raise
+
+
+def test_error_detail_redacts_api_key(monkeypatch):
+    secret = "keen_supersecret_DEADBEEF"
+    monkeypatch.setattr(
+        kc.requests, "post",
+        lambda *a, **k: FakeResponse(status_code=401, json_body={"message": f"bad key {secret}"}),
+    )
+    with pytest.raises(kc.KeenableError) as e:
+        kc.keenable_post("/v1/search/public", "/v1/search", {}, secret, 10.0)
+    assert secret not in str(e.value)
+    assert "keen_***" in str(e.value)
 
 
 # --- endpoint selection + attribution headers ----------------------------

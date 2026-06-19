@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
+import socket
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -69,7 +71,14 @@ def reject_private_fetch_target(url: str) -> None:
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
-        return
+        # Not a standard literal. Catch the legacy/alternate IPv4 encodings the
+        # OS resolver still accepts but ipaddress rejects -- decimal
+        # (2130706433), hex (0x7f000001), octal (0177.0.0.1) and short (127.1)
+        # forms all resolve to 127.0.0.1. inet_aton mirrors that parsing.
+        try:
+            ip = ipaddress.ip_address(socket.inet_aton(host))
+        except OSError:
+            return  # a genuine hostname -- the backend SSRF guard is the backstop
     if (
         ip.is_loopback
         or ip.is_private
@@ -108,12 +117,22 @@ def _raise_for_status(response: requests.Response) -> None:
             detail = str(body.get("message") or body.get("error") or body.get("detail") or "")
     except ValueError:
         detail = (response.text or "").strip()
+    detail = _redact_secrets(detail)
     label = {
         401: "Keenable authentication failed (401)",
         402: "Keenable: insufficient credits (402)",
         429: "Keenable rate limit exceeded (429); set an API key to raise limits",
     }.get(response.status_code, f"Keenable API error ({response.status_code})")
     raise KeenableError(f"{label}: {detail}" if detail else label)
+
+
+def _redact_secrets(text: str) -> str:
+    """Mask any Keenable API key that an error body might echo back.
+
+    Error detail is surfaced to the model/logs, so defensively scrub anything in
+    the ``keen_<token>`` shape rather than trust the API never to reflect a key.
+    """
+    return re.sub(r"keen_[A-Za-z0-9_-]{4,}", "keen_***", text)
 
 
 def _decode(response: requests.Response) -> dict[str, Any]:
