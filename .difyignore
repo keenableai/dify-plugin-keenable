@@ -10,3 +10,7 @@ tests/
 *.difypkg
 .git/
 .gitignore
+.DS_Store
+# Dev/publishing-only files, not needed at runtime (kept in the source repo)
+.env.example
+PUBLISH.md

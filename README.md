@@ -58,6 +58,7 @@ In a **Workflow**, add a Tool node:
 Queries, fetched URLs, and any provided API key are sent to the Keenable API
 (`https://api.keenable.ai`) to fulfill each request. See [PRIVACY.md](./PRIVACY.md).
 
-## Support
+## Source & support
 
+- Source repository: <https://github.com/keenableai/dify-plugin-keenable>
 - Keenable: <https://keenable.ai> · support@keenable.ai
