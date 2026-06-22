@@ -219,6 +219,59 @@ def test_network_error_wrapped(monkeypatch):
     assert "could not reach" in str(e.value).lower()
 
 
+# --- SSRF guard: trailing-dot + base-URL hardening -----------------------
+
+@pytest.mark.parametrize("url", ["http://localhost./x", "http://127.0.0.1./x", "http://LOCALHOST/x"])
+def test_reject_trailing_dot_targets(url):
+    """FQDN trailing-dot form of an internal host must not slip past the guard."""
+    with pytest.raises(kc.KeenableError):
+        kc.reject_private_fetch_target(url)
+
+
+@pytest.mark.parametrize(
+    "bad_base",
+    [
+        "https://10.0.0.1",
+        "https://192.168.1.1",
+        "https://169.254.169.254",
+        "https://metadata.google.internal",
+        "https://127.0.0.1",       # loopback over https
+        "https://2130706433",      # decimal-encoded loopback
+    ],
+)
+def test_base_url_rejects_private_and_metadata(monkeypatch, bad_base):
+    """A misconfigured KEENABLE_API_URL must never point at an internal host."""
+    monkeypatch.setenv("KEENABLE_API_URL", bad_base)
+    with pytest.raises(kc.KeenableError):
+        kc.resolve_base_url()
+
+
+def test_non_json_snippet_redacts_key(monkeypatch):
+    secret = "keen_snippet_DEADBEEF"
+    monkeypatch.setattr(
+        kc.requests, "post",
+        lambda *a, **k: FakeResponse(status_code=200, text=f"<html>key={secret}</html>"),
+    )
+    with pytest.raises(kc.KeenableError) as e:
+        kc.keenable_post("/v1/search/public", "/v1/search", {}, secret, 10.0)
+    assert secret not in str(e.value)
+    assert "keen_***" in str(e.value)
+
+
+def test_transport_error_redacts_key_and_no_repr(monkeypatch):
+    secret = "keen_transport_DEADBEEF"
+
+    def boom(*a, **k):
+        raise kc.requests.ConnectionError(f"failed header key={secret}")
+
+    monkeypatch.setattr(kc.requests, "post", boom)
+    with pytest.raises(kc.KeenableError) as e:
+        kc.keenable_post("/v1/search/public", "/v1/search", {}, secret, 10.0)
+    assert secret not in str(e.value)
+    assert "keen_***" in str(e.value)
+    assert "ConnectionError" in str(e.value)
+
+
 # --- search result formatting -------------------------------------------
 
 def test_format_results_renders_fields():

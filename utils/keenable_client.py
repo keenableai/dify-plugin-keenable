@@ -20,7 +20,7 @@ import requests
 
 # Bumped together with manifest.yaml `version`. Kept as a literal because a Dify
 # plugin is not pip-installed, so importlib.metadata cannot see a package version.
-PLUGIN_VERSION = "0.1.0"
+PLUGIN_VERSION = "0.1.1"
 
 # Tagged User-Agent so Keenable can attribute traffic from this integration.
 _USER_AGENT = f"keenable-dify/{PLUGIN_VERSION}"
@@ -37,20 +37,61 @@ class KeenableError(RuntimeError):
     """A Keenable transport/API error carrying a message safe to show a user."""
 
 
+def _candidate_ips(host: str) -> list:
+    """Every IP address ``host`` could denote, without doing DNS.
+
+    Covers dotted/colon literals AND the legacy/alternate IPv4 encodings the OS
+    resolver accepts but ``ipaddress.ip_address`` rejects as strings -- decimal
+    (``2130706433``), hex (``0x7f000001``), octal (``0177.0.0.1``) and short
+    (``127.1``) forms -- all canonicalized via ``socket.inet_aton``.
+    """
+    candidates = []
+    try:
+        candidates.append(ipaddress.ip_address(host))
+    except ValueError:
+        pass
+    try:
+        packed = socket.inet_aton(host)
+    except OSError:
+        pass
+    else:
+        candidates.append(ipaddress.ip_address(socket.inet_ntoa(packed)))
+    return candidates
+
+
+def _is_private_ip(ip) -> bool:
+    # ``is_reserved`` is intentionally omitted -- it flags non-routable but
+    # harmless ranges (e.g. the 2001:db8::/32 docs prefix). These are the checks
+    # that matter for SSRF.
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
 def resolve_base_url() -> str:
     """Resolve the API base URL from ``KEENABLE_API_URL`` and enforce HTTPS."""
     base = (os.environ.get(_BASE_URL_ENV) or _DEFAULT_BASE_URL).rstrip("/")
     parsed = urlsplit(base)
-    # A usable absolute URL needs a host; bail out clearly on e.g. "https://"
-    # rather than letting a malformed base produce a broken request URL later.
-    if parsed.hostname:
-        if parsed.scheme == "https":
-            return base
-        # Permit plain http only for local development against a loopback host.
-        if parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
-            return base
-    msg = f"{_BASE_URL_ENV} must be an https:// URL with a host, got {base!r}"
-    raise KeenableError(msg)
+    host = (parsed.hostname or "").rstrip(".")
+    if not host:
+        msg = f"{_BASE_URL_ENV} must be an https:// URL with a host, got {base!r}"
+        raise KeenableError(msg)
+    # Local-dev escape hatch: plain http only to an explicit loopback host.
+    if parsed.scheme == "http" and host in {"localhost", "127.0.0.1", "::1"}:
+        return base
+    if parsed.scheme != "https":
+        msg = f"{_BASE_URL_ENV} must be an https:// URL with a host, got {base!r}"
+        raise KeenableError(msg)
+    # Over https, refuse a base URL pointing at a private/internal destination --
+    # a misconfigured KEENABLE_API_URL must never ship API keys to an internal host.
+    if host == "metadata.google.internal" or any(_is_private_ip(ip) for ip in _candidate_ips(host)):
+        msg = f"{_BASE_URL_ENV} must not point at a private/internal address, got {base!r}"
+        raise KeenableError(msg)
+    return base
 
 
 def reject_private_fetch_target(url: str) -> None:
@@ -58,37 +99,23 @@ def reject_private_fetch_target(url: str) -> None:
 
     The backend enforces this server-side too, but a client-side guard avoids
     leaking an internal hostname in a request and is required by our integration
-    contract. Hostnames that are not IP literals pass through; the backend's
-    SSRF guard is the backstop for those.
+    contract. Hostnames that are not IP literals (and not a numeric IPv4 form)
+    pass through; the backend's SSRF guard is the backstop for those.
     """
     host = (urlsplit(url).hostname or "").strip().lower()
+    # A trailing dot is the FQDN form of the same name (``localhost.`` ==
+    # ``localhost``); strip it so it can't slip past the checks below.
+    host = host.rstrip(".")
     if not host:
         msg = f"Refusing to fetch a URL with no host: {url!r}"
         raise KeenableError(msg)
     if host in {"localhost", "metadata.google.internal"}:
         msg = f"Refusing to fetch a private/internal host: {host!r}"
         raise KeenableError(msg)
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        # Not a standard literal. Catch the legacy/alternate IPv4 encodings the
-        # OS resolver still accepts but ipaddress rejects -- decimal
-        # (2130706433), hex (0x7f000001), octal (0177.0.0.1) and short (127.1)
-        # forms all resolve to 127.0.0.1. inet_aton mirrors that parsing.
-        try:
-            ip = ipaddress.ip_address(socket.inet_aton(host))
-        except OSError:
-            return  # a genuine hostname -- the backend SSRF guard is the backstop
-    if (
-        ip.is_loopback
-        or ip.is_private
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    ):
-        msg = f"Refusing to fetch a private/internal address: {host!r}"
-        raise KeenableError(msg)
+    for ip in _candidate_ips(host):
+        if _is_private_ip(ip):
+            msg = f"Refusing to fetch a private/internal address: {host!r}"
+            raise KeenableError(msg)
 
 
 def resolve_api_key(raw: str | None) -> str | None:
@@ -140,13 +167,24 @@ def _decode(response: requests.Response) -> dict[str, Any]:
     try:
         data = response.json()
     except ValueError as e:
-        snippet = (response.text or "")[:200]
+        snippet = _redact_secrets((response.text or "")[:200])
         msg = f"Keenable API returned a non-JSON response: {snippet!r}"
         raise KeenableError(msg) from e
     if not isinstance(data, dict):
-        msg = f"Unexpected response from the Keenable API: {data!r}"
+        msg = f"Unexpected response from the Keenable API: {_redact_secrets(repr(data)[:200])}"
         raise KeenableError(msg)
     return data
+
+
+def _transport_error(e: Exception) -> KeenableError:
+    """Wrap a transport exception, scrubbing any echoed key from its message.
+
+    A custom adapter/proxy could surface a header in the exception string; mask
+    anything in the ``keen_<token>`` shape rather than emit the raw repr.
+    """
+    return KeenableError(
+        f"Could not reach the Keenable API: {type(e).__name__}: {_redact_secrets(str(e))}"
+    )
 
 
 def keenable_post(
@@ -159,8 +197,7 @@ def keenable_post(
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=timeout)
     except requests.RequestException as e:
-        msg = f"Could not reach the Keenable API: {e!r}"
-        raise KeenableError(msg) from e
+        raise _transport_error(e) from e
     return _decode(response)
 
 
@@ -173,6 +210,5 @@ def keenable_get(
     try:
         response = requests.get(url, params=params, headers=_headers(api_key), timeout=timeout)
     except requests.RequestException as e:
-        msg = f"Could not reach the Keenable API: {e!r}"
-        raise KeenableError(msg) from e
+        raise _transport_error(e) from e
     return _decode(response)
