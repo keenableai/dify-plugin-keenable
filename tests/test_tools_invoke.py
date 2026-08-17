@@ -43,7 +43,11 @@ def test_search_keyless_emits_json_and_text(monkeypatch):
 
     def fake_post(url, json=None, headers=None, timeout=None):
         seen.update(url=url, headers=headers, payload=json)
-        return FakeResp({"results": [{"title": "A", "url": "https://a.com", "description": "d"}]})
+        # A realistic result: the API returns both fields, `description` is
+        # frequently empty and `snippet` carries the page text.
+        return FakeResp(
+            {"results": [{"title": "A", "url": "https://a.com", "description": "", "snippet": "page text"}]}
+        )
 
     monkeypatch.setattr(kc.requests, "post", fake_post)
     msgs = list(KeenableSearchTool(runtime=_runtime(), session=None)._invoke({"query": "cats"}))
@@ -112,3 +116,30 @@ def test_search_api_error_surfaces_as_text(monkeypatch):
     msgs = list(KeenableSearchTool(runtime=_runtime(), session=None)._invoke({"query": "q"}))
     assert [m.type for m in msgs] == [TEXT]
     assert "rate limit" in str(msgs[0].message).lower()
+
+
+def test_digest_reads_snippet_with_description_fallback():
+    from tools.keenable_search import _format_results
+
+    digest = _format_results(
+        "q",
+        [
+            {"title": "A", "url": "https://a.com", "description": "", "snippet": "page text"},
+            {"title": "B", "url": "https://b.com", "description": "a description"},
+        ],
+    )
+
+    assert "page text" in digest
+    assert "a description" in digest
+
+
+def test_digest_collapses_whitespace_and_caps_the_snippet():
+    # Snippets are raw page text: newlines would break the one-line-per-field
+    # layout, and they run far longer than the digest should carry.
+    from tools.keenable_search import MAX_SNIPPET_CHARS, _result_snippet
+
+    snippet = _result_snippet({"snippet": "line one\n\nline two" + " padding" * 500})
+
+    assert len(snippet) == MAX_SNIPPET_CHARS
+    assert "\n" not in snippet
+    assert snippet.startswith("line one line two")

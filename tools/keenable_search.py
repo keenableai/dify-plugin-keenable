@@ -6,6 +6,10 @@ from dify_plugin.entities.tool import ToolInvokeMessage
 
 from utils.keenable_client import KeenableError, keenable_post, resolve_api_key
 
+# Keenable returns whole-page text where other engines return a short snippet,
+# so cap what goes into the digest the model reads.
+MAX_SNIPPET_CHARS = 500
+
 
 class KeenableSearchTool(Tool):
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
@@ -39,12 +43,26 @@ class KeenableSearchTool(Tool):
         yield self.create_text_message(_format_results(query, results))
 
 
+def _result_snippet(result: dict[str, Any]) -> str:
+    """Pick a result's text for the digest.
+
+    Keenable returns both ``snippet`` and ``description``: ``snippet`` carries
+    the page text and ``description`` is frequently empty, so prefer whichever
+    has content. Snippets are raw page text with newlines in them, which would
+    break the digest's one-line-per-field layout, and Keenable returns whole
+    pages where other engines return a short snippet — hence the collapse and
+    the cap. The untouched results still go out via ``create_json_message``.
+    """
+    text = " ".join(str(result.get("snippet") or result.get("description") or "").split())
+    return text[:MAX_SNIPPET_CHARS]
+
+
 def _format_results(query: str, results: list[dict[str, Any]]) -> str:
     lines = [f"Search results for {query!r}:", ""]
     for i, result in enumerate(results, start=1):
         title = result.get("title") or result.get("url") or "(untitled)"
         url = result.get("url") or ""
-        snippet = (result.get("description") or "").strip()
+        snippet = _result_snippet(result)
         published = result.get("published_at")
         lines.append(f"{i}. {title}")
         if url:

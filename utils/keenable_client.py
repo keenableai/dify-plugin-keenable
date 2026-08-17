@@ -20,7 +20,7 @@ import requests
 
 # Bumped together with manifest.yaml `version`. Kept as a literal because a Dify
 # plugin is not pip-installed, so importlib.metadata cannot see a package version.
-PLUGIN_VERSION = "0.1.1"
+PLUGIN_VERSION = "0.1.2"
 
 # Tagged User-Agent so Keenable can attribute traffic from this integration.
 _USER_AGENT = f"keenable-dify/{PLUGIN_VERSION}"

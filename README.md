@@ -53,6 +53,18 @@ In a **Workflow**, add a Tool node:
 |---|---|---|---|
 | `url` | string | yes | Absolute `http(s)` URL to fetch and read. |
 
+## Connection requirements
+
+The plugin makes **outbound HTTPS requests to `https://api.keenable.ai` only**, on port
+443. No inbound connections, no other hosts, and no local network access — the fetch
+tool refuses private and internal addresses (loopback, RFC1918, link-local such as
+`169.254.169.254`, reserved, multicast) before any request is issued, including the
+legacy decimal/hex/octal IPv4 encodings that resolvers still accept. Self-hosted Dify
+instances behind an egress firewall need `api.keenable.ai` allowlisted.
+
+No credentials are required: the plugin calls the keyless public endpoints by default.
+An optional `KEENABLE_API_KEY` raises rate limits.
+
 ## Privacy
 
 Queries, fetched URLs, and any provided API key are sent to the Keenable API
