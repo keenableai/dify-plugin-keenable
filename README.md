@@ -68,7 +68,7 @@ An optional `KEENABLE_API_KEY` raises rate limits.
 
 ## Privacy
 
-Queries, fetched URLs, and any provided API key are sent to the Keenable API
+Queries, the optional search objective (free text, if filled in), fetched URLs, and any provided API key are sent to the Keenable API
 (`https://api.keenable.ai`) to fulfill each request. See [PRIVACY.md](./PRIVACY.md).
 
 ## Source & support

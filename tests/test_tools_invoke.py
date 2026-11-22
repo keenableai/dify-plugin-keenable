@@ -97,6 +97,18 @@ def test_search_blank_objective_is_not_sent(monkeypatch):
     assert "objective" not in _search_payload(monkeypatch, {"query": "q", "objective": "  "})
 
 
+def test_search_overlong_objective_short_circuits(monkeypatch):
+    monkeypatch.setattr(kc.requests, "post", lambda *a, **k: pytest.fail("should not call API"))
+    msgs = list(KeenableSearchTool(runtime=_runtime(), session=None)._invoke({"query": "q", "objective": "x" * 1001}))
+    assert [m.type for m in msgs] == [TEXT]
+    assert "1000" in msgs[0].message.text
+
+
+def test_search_objective_at_limit_is_sent(monkeypatch):
+    payload = _search_payload(monkeypatch, {"query": "q", "objective": " " + "x" * 1000 + " "})
+    assert len(payload["objective"]) == 1000
+
+
 def test_search_empty_query_short_circuits(monkeypatch):
     monkeypatch.setattr(kc.requests, "post", lambda *a, **k: pytest.fail("should not call API"))
     msgs = list(KeenableSearchTool(runtime=_runtime(), session=None)._invoke({"query": "  "}))
