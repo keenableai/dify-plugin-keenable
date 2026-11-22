@@ -24,6 +24,9 @@ class KeenableSearchTool(Tool):
             value = tool_parameters.get(field)
             if value:
                 payload[field] = value
+        objective = str(tool_parameters.get("objective") or "").strip()
+        if objective:
+            payload["objective"] = objective
 
         try:
             data = keenable_post(
