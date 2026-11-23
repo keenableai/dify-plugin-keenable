@@ -176,3 +176,19 @@ def test_digest_collapses_whitespace_and_caps_the_snippet():
     assert len(snippet) == MAX_SNIPPET_CHARS
     assert "\n" not in snippet
     assert snippet.startswith("line one line two")
+
+
+def test_plugin_version_matches_manifest():
+    import yaml
+
+    manifest = yaml.safe_load((Path(__file__).resolve().parent.parent / "manifest.yaml").read_text())
+    assert kc.PLUGIN_VERSION == manifest["version"]
+
+
+def test_search_tool_level_llm_description_mentions_objective():
+    import yaml
+
+    spec = yaml.safe_load((Path(__file__).resolve().parent.parent / "tools" / "keenable_search.yaml").read_text())
+    assert "objective" in spec["description"]["llm"]
+    objective = next(p for p in spec["parameters"] if p["name"] == "objective")
+    assert len(objective["llm_description"]) < 400
