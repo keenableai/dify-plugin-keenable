@@ -30,7 +30,7 @@ the most relevant result to read the full page.
 In a **Workflow**, add a Tool node:
 
 - *Keenable Search* — set `query` (and optionally `mode`, `site`,
-  `published_after`, `published_before`). Outputs `json` (`{"results": [...]}`)
+  `published_after`, `published_before`, `objective`). Outputs `json` (`{"results": [...]}`)
   and a formatted `text` digest.
 - *Keenable Fetch* — set `url`. Outputs the page as `json` (with `content` and
   metadata) and as `text` (the markdown content).
@@ -46,6 +46,7 @@ In a **Workflow**, add a Tool node:
 | `site` | string | no | Restrict results to a single domain, e.g. `github.com`. |
 | `published_after` | string | no | Only pages published on/after `YYYY-MM-DD`. |
 | `published_before` | string | no | Only pages published on/before `YYYY-MM-DD`. |
+| `objective` | string | no | What the search is for: what the query leaves out and what earlier searches found, for multi-step or ambiguous questions (max 1,000 characters). The ranker scores it together with the query. |
 
 ### Keenable Fetch
 
@@ -67,7 +68,7 @@ An optional `KEENABLE_API_KEY` raises rate limits.
 
 ## Privacy
 
-Queries, fetched URLs, and any provided API key are sent to the Keenable API
+Queries, the optional search objective (free text, if filled in), fetched URLs, and any provided API key are sent to the Keenable API
 (`https://api.keenable.ai`) to fulfill each request. See [PRIVACY.md](./PRIVACY.md).
 
 ## Source & support

@@ -5,7 +5,11 @@ This plugin connects Dify to the Keenable web-search API (`https://api.keenable.
 ## What data is sent
 
 - **Keenable Search** sends your search query and any optional filters you set
-  (mode, site, date range) to the Keenable API.
+  (mode, site, date range) to the Keenable API. If the optional **objective**
+  is filled in (by you, or by an agent or workflow that composes it from task
+  context), that free text is sent to and processed by Keenable alongside the
+  query, to rank results. Leave it empty, and avoid personal or confidential
+  details in it.
 - **Keenable Fetch** sends the URL you ask to read to the Keenable API.
 - An optional API key, if you provide one in the plugin credentials, is sent as
   the `X-API-Key` request header to authenticate and raise rate limits. With no

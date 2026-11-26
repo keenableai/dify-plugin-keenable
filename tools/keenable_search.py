@@ -10,6 +10,9 @@ from utils.keenable_client import KeenableError, keenable_post, resolve_api_key
 # so cap what goes into the digest the model reads.
 MAX_SNIPPET_CHARS = 500
 
+# Documented limit of the optional ``objective`` parameter.
+MAX_OBJECTIVE_CHARS = 1000
+
 
 class KeenableSearchTool(Tool):
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
@@ -24,6 +27,15 @@ class KeenableSearchTool(Tool):
             value = tool_parameters.get(field)
             if value:
                 payload[field] = value
+        objective = str(tool_parameters.get("objective") or "").strip()
+        if len(objective) > MAX_OBJECTIVE_CHARS:
+            yield self.create_text_message(
+                f"The objective is {len(objective)} characters; the limit is "
+                f"{MAX_OBJECTIVE_CHARS}. Shorten it to two or three sentences."
+            )
+            return
+        if objective:
+            payload["objective"] = objective
 
         try:
             data = keenable_post(

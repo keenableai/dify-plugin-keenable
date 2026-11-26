@@ -8,7 +8,7 @@ description:
   human:
     en_US: Search the web with Keenable, a search engine built for AI agents. Returns ranked results with titles, URLs, snippets and dates.
     zh_Hans: 使用专为 AI 智能体打造的搜索引擎 Keenable 搜索网页，返回带标题、URL、摘要和日期的排序结果。
-  llm: Search the web for current information. Returns a ranked list of results, each with a title, URL, description snippet and publication date. Use this to answer questions about recent events, find sources, or look up facts. Follow up with keenable_fetch to read a result's full page content.
+  llm: Search the web for current information. Returns a ranked list of results, each with a title, URL, description snippet and publication date. Use this to answer questions about recent events, find sources, or look up facts. For a multi-step or ambiguous question, also pass objective, which says what the search is for, what the query leaves out and what earlier searches found. Follow up with keenable_fetch to read a result's full page content.
 parameters:
   - name: query
     type: string
@@ -75,6 +75,17 @@ parameters:
       en_US: Only pages published on or before this date (YYYY-MM-DD).
       zh_Hans: 仅返回在该日期当天或之前发布的页面（YYYY-MM-DD）。
     llm_description: Optional. Only return pages published on or before this date, formatted YYYY-MM-DD.
+  - name: objective
+    type: string
+    required: false
+    form: llm
+    label:
+      en_US: Objective
+      zh_Hans: 搜索目标
+    human_description:
+      en_US: What the search is for, for multi-step or ambiguous questions (max 1,000 characters). Used by the ranker together with the query.
+      zh_Hans: 说明本次搜索的目的，用于多步骤或有歧义的搜索（最多 1000 个字符）。排序时会与查询一起使用。
+    llm_description: "Optional. Use for multi-step or ambiguous searches; omit for simple lookups. In one to three plain sentences, say what the search is for, what the query leaves out (who, where, when, which sources count) and what earlier searches found. Don't restate the question or include personal or confidential details. At most 1,000 characters."
 extra:
   python:
     source: tools/keenable_search.py
