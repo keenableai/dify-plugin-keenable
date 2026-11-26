@@ -6,7 +6,7 @@ from dify_plugin.entities.tool import ToolInvokeMessage
 
 from utils.keenable_client import (
     KeenableError,
-    keenable_get,
+    keenable_fetch,
     reject_private_fetch_target,
     resolve_api_key,
 )
@@ -29,9 +29,7 @@ class KeenableFetchTool(Tool):
 
         api_key = resolve_api_key(self.runtime.credentials.get("keenable_api_key"))
         try:
-            data = keenable_get(
-                "/v1/fetch/public", "/v1/fetch", {"url": url}, api_key, timeout=30.0
-            )
+            data = keenable_fetch(url, api_key, timeout=30.0)
         except KeenableError as e:
             yield self.create_text_message(str(e))
             return

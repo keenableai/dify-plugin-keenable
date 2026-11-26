@@ -169,19 +169,44 @@ def test_post_keyed_uses_authenticated_endpoint(monkeypatch):
     assert captured["headers"]["X-API-Key"] == "keen_k"
 
 
-def test_get_keyed_endpoint_and_params(monkeypatch):
+def test_fetch_keyed_posts_urls_and_returns_page(monkeypatch):
     captured = {}
 
-    def fake_get(url, params=None, headers=None, timeout=None):
-        captured.update(url=url, params=params, headers=headers)
-        return FakeResponse(json_body={"content": "hi"})
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(url=url, json=json, headers=headers)
+        return FakeResponse(json_body={"results": [{"url": "https://e.com", "content": "hi"}]})
 
-    monkeypatch.setattr(kc.requests, "get", fake_get)
-    out = kc.keenable_get("/v1/fetch/public", "/v1/fetch", {"url": "https://e.com"}, "k", 10.0)
+    monkeypatch.setattr(kc.requests, "post", fake_post)
+    out = kc.keenable_fetch("https://e.com", "k", 10.0)
 
     assert captured["url"] == "https://api.keenable.ai/v1/fetch"
-    assert captured["params"] == {"url": "https://e.com"}
-    assert out == {"content": "hi"}
+    assert captured["json"] == {"urls": ["https://e.com"]}
+    assert out == {"url": "https://e.com", "content": "hi"}
+
+
+def test_fetch_keyless_uses_public_endpoint(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(url=url)
+        return FakeResponse(json_body={"results": [{"url": "https://e.com", "content": "hi"}]})
+
+    monkeypatch.setattr(kc.requests, "post", fake_post)
+    kc.keenable_fetch("https://e.com", None, 10.0)
+    assert captured["url"] == "https://api.keenable.ai/v1/fetch/public"
+
+
+def test_fetch_page_error_raises(monkeypatch):
+    body = {"results": [{"url": "https://e.com", "error": {"status": 404, "message": "page not found"}}]}
+    monkeypatch.setattr(kc.requests, "post", lambda *a, **k: FakeResponse(json_body=body))
+    with pytest.raises(kc.KeenableError, match="404.*page not found"):
+        kc.keenable_fetch("https://e.com", None, 10.0)
+
+
+def test_fetch_without_results_raises(monkeypatch):
+    monkeypatch.setattr(kc.requests, "post", lambda *a, **k: FakeResponse(json_body={"results": []}))
+    with pytest.raises(kc.KeenableError):
+        kc.keenable_fetch("https://e.com", None, 10.0)
 
 
 # --- error mapping -------------------------------------------------------

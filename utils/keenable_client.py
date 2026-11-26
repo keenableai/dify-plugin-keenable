@@ -13,7 +13,7 @@ import ipaddress
 import os
 import re
 import socket
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import urlsplit
 
 import requests
@@ -133,6 +133,17 @@ def _headers(api_key: str | None) -> dict[str, str]:
     return headers
 
 
+def _raise_api_error(status: int, detail: str) -> NoReturn:
+    """Raise the readable :class:`KeenableError` for an API error status."""
+    detail = _redact_secrets(detail)
+    label = {
+        401: "Keenable authentication failed (401)",
+        402: "Keenable: insufficient credits (402)",
+        429: "Keenable rate limit exceeded (429); set an API key to raise limits",
+    }.get(status, f"Keenable API error ({status})")
+    raise KeenableError(f"{label}: {detail}" if detail else label)
+
+
 def _raise_for_status(response: requests.Response) -> None:
     """Map a non-2xx Keenable response to a readable :class:`KeenableError`."""
     if response.ok:
@@ -144,13 +155,7 @@ def _raise_for_status(response: requests.Response) -> None:
             detail = str(body.get("message") or body.get("error") or body.get("detail") or "")
     except ValueError:
         detail = (response.text or "").strip()
-    detail = _redact_secrets(detail)
-    label = {
-        401: "Keenable authentication failed (401)",
-        402: "Keenable: insufficient credits (402)",
-        429: "Keenable rate limit exceeded (429); set an API key to raise limits",
-    }.get(response.status_code, f"Keenable API error ({response.status_code})")
-    raise KeenableError(f"{label}: {detail}" if detail else label)
+    _raise_api_error(response.status_code, detail)
 
 
 def _redact_secrets(text: str) -> str:
@@ -201,14 +206,17 @@ def keenable_post(
     return _decode(response)
 
 
-def keenable_get(
-    public_path: str, keyed_path: str, params: dict[str, Any], api_key: str | None, timeout: float
-) -> dict[str, Any]:
-    """GET the keyed or keyless endpoint with query ``params``; return the body."""
-    path = keyed_path if api_key else public_path
-    url = f"{resolve_base_url()}{path}"
-    try:
-        response = requests.get(url, params=params, headers=_headers(api_key), timeout=timeout)
-    except requests.RequestException as e:
-        raise _transport_error(e) from e
-    return _decode(response)
+def keenable_fetch(url: str, api_key: str | None, timeout: float) -> dict[str, Any]:
+    """Read one page with ``POST /v1/fetch``; return its result or raise its error."""
+    data = keenable_post("/v1/fetch/public", "/v1/fetch", {"urls": [url]}, api_key, timeout)
+    results = data.get("results")
+    page = results[0] if isinstance(results, list) and results else None
+    if not isinstance(page, dict):
+        msg = "Unexpected response from the Keenable API: no page in results"
+        raise KeenableError(msg)
+    error = page.get("error")
+    if isinstance(error, dict):
+        status = error.get("status")
+        status = status if isinstance(status, int) else 500
+        _raise_api_error(status, str(error.get("message") or error.get("error") or ""))
+    return page

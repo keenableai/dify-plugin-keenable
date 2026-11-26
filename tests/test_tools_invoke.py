@@ -118,22 +118,22 @@ def test_search_empty_query_short_circuits(monkeypatch):
 def test_fetch_keyed_emits_json_and_text(monkeypatch):
     seen = {}
 
-    def fake_get(url, params=None, headers=None, timeout=None):
-        seen.update(url=url, params=params, headers=headers)
-        return FakeResp({"content": "# A", "url": "https://a.com", "title": "A"})
+    def fake_post(url, json=None, headers=None, timeout=None):
+        seen.update(url=url, payload=json, headers=headers)
+        return FakeResp({"results": [{"content": "# A", "url": "https://a.com", "title": "A"}]})
 
-    monkeypatch.setattr(kc.requests, "get", fake_get)
+    monkeypatch.setattr(kc.requests, "post", fake_post)
     msgs = list(KeenableFetchTool(runtime=_runtime("keen_x"), session=None)._invoke({"url": "https://a.com"}))
 
     assert seen["url"].endswith("/v1/fetch")  # keyed
     assert seen["headers"]["X-API-Key"] == "keen_x"
-    assert seen["params"] == {"url": "https://a.com"}
+    assert seen["payload"] == {"urls": ["https://a.com"]}
     assert [m.type for m in msgs] == [JSON, TEXT]
 
 
 @pytest.mark.parametrize("url", ["http://169.254.169.254/x", "ftp://x", "http://localhost/x"])
 def test_fetch_rejects_unsafe_urls_without_calling_api(monkeypatch, url):
-    monkeypatch.setattr(kc.requests, "get", lambda *a, **k: pytest.fail("should not call API"))
+    monkeypatch.setattr(kc.requests, "post", lambda *a, **k: pytest.fail("should not call API"))
     msgs = list(KeenableFetchTool(runtime=_runtime(), session=None)._invoke({"url": url}))
     assert [m.type for m in msgs] == [TEXT]
 
